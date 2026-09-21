@@ -3,7 +3,20 @@
 // PeerJS's public introducer only helps the two browsers find each other; play is direct.
 
 const ID_PREFIX = 'nomic-v1-';
-const peerOpts = { debug: 1 };
+// STUN finds a direct path (same wifi, most home networks). The TURN relays are the fallback
+// for phones on cellular or strict networks — Open Relay's free servers, no account needed.
+const peerOpts = {
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    ],
+  },
+};
 
 export function hostRoom(code, { onAction, onLeave }) {
   const peer = new Peer(ID_PREFIX + code, peerOpts);
@@ -40,10 +53,15 @@ export function joinRoom(code, { id, name, onState, onStatus }) {
     conn.on('open', () => { onStatus('open'); conn.send({ type: 'hello', id, name }); });
     conn.on('data', msg => { if (msg?.type === 'state') onState(msg.state); });
     conn.on('close', () => { onStatus('closed'); if (!closed) setTimeout(connect, 2000); });
-    conn.on('error', () => onStatus('error'));
+    conn.on('error', e => { onStatus('error', 'link: ' + (e?.type || e?.message || e)); if (!closed) setTimeout(connect, 3000); });
+    conn.on('iceStateChanged', st => { if (st === 'failed' || st === 'disconnected') onStatus('error', 'no path to the screen (' + st + ')'); });
   };
   peer.on('open', connect);
-  peer.on('error', e => { onStatus(e.type === 'peer-unavailable' ? 'no-room' : 'error'); if (e.type === 'peer-unavailable' && !closed) setTimeout(connect, 3000); });
+  peer.on('disconnected', () => { onStatus('closed'); if (!closed) peer.reconnect(); });
+  peer.on('error', e => {
+    if (e.type === 'peer-unavailable') { onStatus('no-room'); if (!closed) setTimeout(connect, 3000); }
+    else onStatus('error', e.type || e.message);
+  });
   return {
     send(action) { if (conn?.open) conn.send({ ...action, id }); },
     close() { closed = true; peer.destroy(); },

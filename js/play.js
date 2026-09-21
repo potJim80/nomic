@@ -32,13 +32,13 @@ function renderJoinForm(err) {
 
 function connect(code, name) {
   if (room) room.close();
-  $('#view').innerHTML = `<h2>Finding the table…</h2><p>Code ${esc(code)}</p>`;
+  $('#view').innerHTML = `<h2>Finding the table…</h2><p>Code ${esc(code)}</p><p class="hint">If this takes more than a few seconds: is the screen still open? The status in the corner says what went wrong.</p>`;
   room = joinRoom(code, {
     id: me, name,
     onState: (s) => { try { state = s; render(); } catch (e) { console.error('render failed', e); } },
-    onStatus: (st) => {
+    onStatus: (st, detail) => {
       status = st;
-      $('#status').textContent = { connecting: 'connecting', open: 'connected', closed: 'reconnecting…', error: 'connection error', 'no-room': 'no table with that code' }[st] || st;
+      $('#status').textContent = ({ connecting: 'connecting', open: 'connected', closed: 'reconnecting…', error: 'error: ' + (detail || '?'), 'no-room': 'no table with that code' }[st] || st);
       $('#status').className = 'status ' + (st === 'open' ? 'open' : '');
       if (st === 'no-room' && !state) renderJoinForm('No table is open with that code. Check the screen.');
     },
