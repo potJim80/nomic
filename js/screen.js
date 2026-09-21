@@ -3,6 +3,7 @@ import { current, describe } from './game.js';
 import { Host } from './host.js';
 import { runDemo } from './demo.js';
 import { hostRoom } from './net.js';
+import { narrate, openVoiceDialog, voice } from './voice.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -14,6 +15,7 @@ let fx = { die: null, ruling: null };   // screen-only effects (a die mid-roll, 
 let lastRulingId = null;
 
 export function render(s) {
+  narrate(prev, s);
   renderJoin(s);
   renderStatus(s);
   renderLog(s);
@@ -53,6 +55,7 @@ function renderStatus(s) {
     const open = s.requests.filter(r => !r.answered).length;
     j.className = 'judgeline ' + (s.judge.present ? 'on' : '');
     j.textContent = s.judge.present ? `⚖ ${s.judge.name} is judging${open ? ` · ${open} question${open > 1 ? 's' : ''} waiting` : ''}` : `⚖ Judge's seat empty`;
+    $('voiceLine').textContent = voice.read === 'off' ? 'V · voice off' : voice.key ? `V · ${voice.read === 'all' ? 'narrating' : 'reading rulings'} (ElevenLabs)` : `V · ${voice.read === 'all' ? 'narrating' : 'reading rulings'} (Mac voice)`;
   }
 }
 
@@ -225,4 +228,5 @@ function drawQr() {
 window.addEventListener('keydown', e => {
   if (e.key === 'Enter' && host.state.phase === 'lobby') host.dispatch({ type: 'start' });
   if (e.key.toLowerCase() === 'n' && host.state.phase === 'over') host.dispatch({ type: 'newgame' });
+  if (e.key.toLowerCase() === 'v' && !document.getElementById('voiceDialog')?.open) openVoiceDialog();
 });

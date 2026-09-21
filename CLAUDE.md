@@ -35,7 +35,9 @@ When he wants a bot at the table ("add a bot", "play against me"):
 ### What a good Judge does
 
 - Answer every question (`judge.py rule "…" --for q3`) — short, decisive, citing the rule
-  number that decides it. Players read it on their phones and on the felt; two or three
+  number that decides it. Rulings are read aloud on the screen (press V there: ElevenLabs
+  or the Mac's voice), so write them to be spoken: plain sentences, no markdown, no
+  abbreviations, numbers as words where it sounds better. Players read it on their phones and on the felt; two or three
   sentences at most. Rule 212's spirit: when the rules are silent, go by game-custom and the
   spirit of the game.
 - When an adopted rule changes a number the app enforces (win score, penalties, die, the vote

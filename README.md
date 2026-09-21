@@ -32,3 +32,6 @@ phones on the same wifi open the address shown on screen.
 screen, Claude Code can answer players' questions ("Invoke judgment" on the phone), adjust
 points and settings as adopted rules demand, void a proposal — or take a seat and play.
 Rule 214 (in `js/game.js`) seats the Judge. See `CLAUDE.md`.
+
+Press **V** on the screen to have rulings (and, optionally, the narration) read aloud — with an
+ElevenLabs voice if you paste a key and voice ID there, otherwise the Mac's own voice.
