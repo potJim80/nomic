@@ -8,6 +8,20 @@ export const voice = { ...DEFAULTS };
 try { Object.assign(voice, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {}
 export function saveVoice(v) { Object.assign(voice, v); try { localStorage.setItem(KEY, JSON.stringify(voice)); } catch {} }
 
+// One-time setup from a link: index.html?xi=KEY&voice=ID&read=all — saved, then scrubbed from the address bar.
+{
+  const q = new URLSearchParams(location.search);
+  if (q.has('xi') || q.has('voice') || q.has('read')) {
+    const v = {};
+    if (q.has('xi')) v.key = q.get('xi');
+    if (q.has('voice')) v.voiceId = q.get('voice');
+    if (q.has('read')) v.read = q.get('read');
+    saveVoice(v);
+    for (const k of ['xi', 'voice', 'read']) q.delete(k);
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+  }
+}
+
 const queue = [];
 let playing = false, unlocked = false;
 document.addEventListener('pointerdown', () => unlocked = true, { once: true });
