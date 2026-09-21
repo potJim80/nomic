@@ -1,0 +1,178 @@
+// Renders a game state onto the main screen. Pure view: render(state) any time state changes.
+import { current, describe } from './game.js';
+import { Host } from './host.js';
+import { runDemo } from './demo.js';
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+let tab = 'immutable';
+let prev = null;          // last rendered state, for change detection
+let fx = { die: null };   // screen-only effects (a die mid-roll)
+
+export function render(s) {
+  renderJoin(s);
+  renderStatus(s);
+  renderLog(s);
+  renderRules(s);
+  renderSeats(s);
+  renderMarker(s);
+  renderCenter(s);
+  prev = s;
+}
+
+function renderJoin(s) {
+  $('code').textContent = s.code || '····';
+  $('joinUrl').textContent = location.origin + location.pathname.replace(/[^/]*$/, '') + 'play.html';
+}
+
+function renderStatus(s) {
+  const t = $('turnLine');
+  const c = current(s);
+  t.textContent = {
+    lobby: s.players.length < 2 ? 'Waiting for players' : `${s.players.length} at the table`,
+    propose: `${c?.name} is proposing`,
+    vote: `Voting on proposal ${s.proposal?.n}`,
+    result: `Proposal ${s.proposal?.n} ${s.proposal?.adopted ? 'adopted' : 'defeated'}`,
+    roll: `${c?.name} rolls`,
+    over: 'Game over',
+  }[s.phase] || '';
+  const mut = s.rules.filter(r => r.mutable).length;
+  $('rulesLine').textContent = `Turn ${s.turnNumber} · ${s.rules.length} rules (${mut} mutable) · ${s.settings.unanimous ? 'unanimity' : 'majority'} · first to ${s.settings.winScore}`;
+}
+
+function renderLog(s) {
+  const l = $('log');
+  const want = s.log.slice(0, 14);
+  if (l.dataset.top === String(want[0]?.at) && l.children.length === want.length) return;
+  l.replaceChildren(...want.map(e => el('li', '', esc(e.t))));
+  l.dataset.top = String(want[0]?.at);
+}
+
+function renderRules(s) {
+  const list = s.rules.filter(r => r.mutable === (tab === 'mutable'));
+  const ol = $('rules');
+  const seen = new Set(prev?.rules.map(r => r.n));
+  ol.replaceChildren(...list.map(r => {
+    const li = el('li', prev && !seen.has(r.n) ? 'new' : '');
+    li.innerHTML = `<b>${r.n}</b><span class="text">${esc(r.text)}</span>`;
+    li.onclick = () => li.classList.toggle('open');
+    return li;
+  }));
+}
+
+// Seats sit on an ellipse around the felt; seat 0 at the bottom, then clockwise.
+function seatPos(i, n) {
+  const a = Math.PI / 2 + (2 * Math.PI * i) / n;
+  return { x: 50 + 46 * Math.cos(a), y: 50 + 43 * Math.sin(a), a };
+}
+
+function renderSeats(s) {
+  const box = $('seats');
+  const n = s.players.length;
+  const have = new Map([...box.children].map(c => [c.dataset.id, c]));
+  s.players.forEach((p, i) => {
+    let seat = have.get(p.id);
+    if (!seat) {
+      seat = el('div', 'seat');
+      seat.dataset.id = p.id;
+      seat.innerHTML = `<div class="body"><div class="token" style="--c:${p.color}">${esc(p.name[0].toUpperCase())}</div><div class="name"></div><div class="score">0</div></div><div class="card"><div class="back"></div><div class="face"></div></div>`;
+      box.appendChild(seat);
+    }
+    have.delete(p.id);
+    const { x, y, a } = seatPos(i, n);
+    seat.style.left = x + '%'; seat.style.top = y + '%';
+    seat.classList.toggle('current', s.phase !== 'lobby' && s.phase !== 'over' && i === s.turnIndex);
+    seat.classList.toggle('away', !p.connected);
+    seat.querySelector('.name').textContent = p.name;
+    const sc = seat.querySelector('.score');
+    if (sc.textContent !== String(p.score)) { sc.textContent = p.score; sc.classList.remove('bump'); void sc.offsetWidth; sc.classList.add('bump'); }
+    // vote card slides onto the felt in front of the seat
+    const card = seat.querySelector('.card');
+    const t = $('table').getBoundingClientRect();
+    card.style.setProperty('--dx', ((0.35 - 0.46) * t.width * Math.cos(a)) + 'px');
+    card.style.setProperty('--dy', ((0.28 - 0.43) * t.height * Math.sin(a)) + 'px');
+    const v = s.proposal?.votes?.[p.id];
+    const voted = v !== undefined && (s.phase === 'vote' || s.phase === 'result');
+    card.classList.toggle('in', voted);
+    card.classList.toggle('flip', voted && s.phase === 'result');
+    card.classList.toggle('aye', v === true); card.classList.toggle('nay', v === false);
+    card.querySelector('.face').textContent = v ? 'AYE' : 'NAY';
+  });
+  for (const gone of have.values()) gone.remove();
+}
+
+function renderMarker(s) {
+  const m = $('marker');
+  const on = s.phase !== 'lobby' && s.phase !== 'over' && s.players.length > 0;
+  m.classList.toggle('on', on);
+  if (!on) return;
+  const { a } = seatPos(s.turnIndex, s.players.length);
+  const t = $('table').getBoundingClientRect();
+  const x = t.width / 2 + t.width * 0.30 * Math.cos(a), y = t.height / 2 + t.height * 0.20 * Math.sin(a);
+  m.style.transform = `translate(${x - 9}px, ${y - 9}px)`;
+}
+
+function renderCenter(s) {
+  const c = $('center');
+  const key = fx.die ? 'die' : `${s.phase}:${s.proposal?.n}:${s.winner}:${s.code}`;
+  if (c.dataset.key === key) { if (s.phase === 'vote') updateTally(s); return; }
+  c.dataset.key = key;
+  c.replaceChildren();
+  if (fx.die) { c.appendChild(dieEl(fx.die)); return; }
+  switch (s.phase) {
+    case 'lobby':
+      c.appendChild(el('div', 'waiting', `<div class="bigcode">${esc(s.code)}</div><small>${s.players.length < 2 ? 'two or more to begin' : 'press start on the host phone'}</small>`)); break;
+    case 'propose':
+      c.appendChild(el('div', 'waiting', `${esc(current(s).name)} is writing a proposal…<small>proposal ${s.nextProposal}</small>`)); break;
+    case 'vote':
+    case 'result': {
+      const p = s.proposal;
+      const paper = el('div', 'paper', `<div class="n">Proposal <b>${p.n}</b></div><div class="kind">${esc(current(s).name)} moves to ${esc(describe(s, p))}</div><div class="text">${esc(p.text || (p.kind === 'repeal' ? 'Strike the rule.' : 'Change its status.'))}</div><div class="tally"></div>`);
+      if (s.phase === 'result') paper.appendChild(el('div', 'stamp ' + (p.adopted ? 'adopted' : 'defeated'), p.adopted ? 'Adopted' : (p.void ? 'Void' : 'Defeated')));
+      c.appendChild(paper); updateTally(s); break;
+    }
+    case 'roll':
+      c.appendChild(el('div', 'waiting', `${esc(current(s).name)} to roll<small>press roll on your phone</small>`)); break;
+    case 'over': {
+      const w = s.players.find(p => p.id === s.winner);
+      c.appendChild(el('div', 'winner', `<div class="sub">Rule ${s.settings.winScore === 100 ? '208' : '208 as amended'}</div><div class="who">${esc(w?.name)}</div><div class="sub">wins with ${w?.score}</div>`)); break;
+    }
+  }
+}
+
+function updateTally(s) {
+  const t = $('center').querySelector('.tally'); if (!t) return;
+  const p = s.proposal, n = Object.keys(p.votes).length;
+  t.textContent = s.phase === 'result' ? `${p.yes} aye · ${p.no} nay · ${s.settings.unanimous || p.kind === 'transmute' ? 'unanimity required' : 'majority required'}`
+    : `${n} of ${s.players.length} voted · ${s.settings.unanimous || p.kind === 'transmute' ? 'unanimity required' : 'majority required'}`;
+}
+
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+const LAND = { 1: 'rotateX(0) rotateY(0)', 2: 'rotateY(-90deg)', 3: 'rotateX(-90deg)', 4: 'rotateX(90deg)', 5: 'rotateY(90deg)', 6: 'rotateY(180deg)' };
+function dieEl(face) {
+  const w = el('div', 'die-wrap');
+  const d = el('div', 'die rolling');
+  for (let f = 1; f <= 6; f++) d.appendChild(el('div', 'f f' + f, Array.from({ length: 9 }, (_, i) => `<i class="${PIPS[f].includes(i) ? 'on' : ''}"></i>`).join('')));
+  w.append(d, el('div', 'die-label', ''));
+  setTimeout(() => { d.classList.remove('rolling'); d.style.transform = LAND[face] + ' rotateZ(' + (Math.random() * 12 - 6) + 'deg)'; }, 1000);
+  setTimeout(() => { w.querySelector('.die-label').textContent = face; }, 1900);
+  return w;
+}
+
+// The screen asks for a die animation and gets a promise that resolves when it has landed.
+export function showDie(face) {
+  fx.die = face; if (prev) render(prev);
+  return new Promise(res => setTimeout(() => { fx.die = null; res(); }, 2600));
+}
+
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  tab = b.dataset.tab; if (prev) renderRules(prev);
+});
+window.addEventListener('resize', () => { if (prev) { renderSeats(prev); renderMarker(prev); } });
+
+const host = new Host({ render, showDie });
+window.nomic = host;
+if (new URLSearchParams(location.search).has('demo')) runDemo(host);

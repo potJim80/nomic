@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nomic</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/screen.css">
+</head>
+<body>
+<main id="screen">
+  <aside id="left">
+    <div class="panel join">
+      <div class="label">Join at</div>
+      <div id="joinUrl" class="url">…</div>
+      <div class="label">Room code</div>
+      <div id="code" class="code">····</div>
+      <div id="qr" class="qr"></div>
+    </div>
+    <div class="panel status">
+      <div id="turnLine" class="turnline">Waiting for players</div>
+      <div id="rulesLine" class="ruleline"></div>
+    </div>
+    <ol id="log" class="log"></ol>
+  </aside>
+
+  <section id="table-wrap">
+    <div id="table">
+      <div id="felt"></div>
+      <div id="marker" class="marker"></div>
+      <div id="seats"></div>
+      <div id="center"></div>
+    </div>
+  </section>
+
+  <aside id="right">
+    <div class="panel book">
+      <div class="label">The rules</div>
+      <div class="tabs"><button data-tab="immutable" class="on">Immutable</button><button data-tab="mutable">Mutable</button></div>
+      <ol id="rules" class="rules"></ol>
+    </div>
+  </aside>
+</main>
+<script type="module" src="js/screen.js"></script>
+</body>
+</html>
