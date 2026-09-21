@@ -90,6 +90,7 @@ export function apply(state, action) {
         if (!r.mutable && kind !== 'transmute') return state;   // rule 103: immutable rules can't be amended/repealed
       }
       s.proposal = { n: s.nextProposal++, by: action.id, kind, text, target, votes: {} };
+      delete s.redo;
       s.phase = 'vote';
       say(`Proposal ${s.proposal.n} by ${current(s).name}: ${describe(s, s.proposal)}.`);
       return s;
@@ -177,15 +178,23 @@ export function apply(state, action) {
       return s;
     }
 
-    case 'void': {       // the Judge voids the proposal on the table (during the vote or right after)
+    case 'void': {       // the Judge voids the proposal on the table
       if (!s.proposal || !['vote', 'result'].includes(s.phase)) return state;
       const p = s.proposal;
-      if (p.adopted) undoAdoption(s, p);
-      p.adopted = false; p.void = action.reason || 'judgment';
+      p.adopted && undoAdoption(s, p);
+      p.adopted = false; p.void = String(action.reason || 'judgment').slice(0, 300);
       p.yes = p.yes ?? 0; p.no = p.no ?? 0;
-      if (s.phase === 'vote') { s.history.unshift({ ...p, byName: current(s).name }); s.phase = 'result'; s.pendingPhase = 'roll'; }
-      else { const h = s.history.find(h => h.n === p.n); if (h) { h.adopted = false; h.void = p.void; } }
-      say(`Proposal ${p.n} is void: ${p.void}.`);
+      if (s.phase === 'vote') {
+        // voided before the vote closed: the mover gets to rewrite it. The number is spent (rule 108).
+        s.history.unshift({ ...p, byName: current(s).name });
+        s.proposal = null;
+        s.redo = { n: p.n, reason: p.void };
+        s.phase = 'propose';
+        say(`Proposal ${p.n} is void: ${p.void}. ${current(s).name} may rewrite it.`);
+      } else {
+        const h = s.history.find(h => h.n === p.n); if (h) { h.adopted = false; h.void = p.void; }
+        say(`Proposal ${p.n} is void: ${p.void}.`);
+      }
       return s;
     }
 

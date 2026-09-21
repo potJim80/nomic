@@ -65,7 +65,7 @@ function render() {
       break;
 
     case 'propose':
-      if (!mine) { v.innerHTML = `<h2>${esc(cur.name)} is writing a proposal.</h2><p>Proposal ${state.nextProposal}. Read the rules while you wait.</p>`; break; }
+      if (!mine) { v.innerHTML = `<h2>${esc(cur.name)} is ${state.redo ? 'rewriting' : 'writing'} a proposal.</h2><p>Proposal ${state.nextProposal}.${state.redo ? ` The last one was void: ${esc(state.redo.reason)}.` : ' Read the rules while you wait.'}</p>`; break; }
       renderProposeForm(v);
       break;
 
@@ -135,7 +135,8 @@ function paper(pr) {
 function renderProposeForm(v) {
   const targets = state.rules.filter(r => draft.kind === 'transmute' ? true : r.mutable);
   const needsTarget = draft.kind !== 'enact', needsText = draft.kind === 'enact' || draft.kind === 'amend';
-  v.innerHTML = `<h1>Your proposal.</h1><p>Number ${state.nextProposal}. Everyone votes once you send it.</p>
+  v.innerHTML = `${state.redo ? `<div class="paper ruling"><div class="n">Proposal ${state.redo.n} was void</div><div class="text">${esc(state.redo.reason)}</div><div class="kind" style="margin-top:8px">Rewrite it — no penalty.</div></div>` : ''}
+    <h1>${state.redo ? 'Try again.' : 'Your proposal.'}</h1><p>Number ${state.nextProposal}. Everyone votes once you send it.</p>
     <div class="kinds">${['enact', 'amend', 'repeal', 'transmute'].map(k => `<button data-k="${k}" class="${draft.kind === k ? 'on' : ''}">${{ enact: 'New rule', amend: 'Amend a rule', repeal: 'Repeal a rule', transmute: 'Transmute a rule' }[k]}</button>`).join('')}</div>
     ${needsTarget ? `<div><label>Which rule</label><select id="target"><option value="">—</option>${targets.map(r => `<option value="${r.n}" ${String(r.n) === String(draft.target) ? 'selected' : ''}>${r.n} ${r.mutable ? '' : '(immutable)'} — ${esc(r.text.slice(0, 50))}…</option>`).join('')}</select></div>` : ''}
     ${draft.kind === 'transmute' ? `<p class="note">Transmutation always needs a unanimous vote (rule 109).</p>` : ''}

@@ -38,7 +38,7 @@ function renderStatus(s) {
   const c = current(s);
   t.textContent = {
     lobby: s.players.length < 2 ? 'Waiting for players' : `${s.players.length} at the table`,
-    propose: `${c?.name} is proposing`,
+    propose: `${c?.name} is ${s.redo ? 'rewriting' : 'proposing'}`,
     vote: `Voting on proposal ${s.proposal?.n}`,
     result: `Proposal ${s.proposal?.n} ${s.proposal?.adopted ? 'adopted' : 'defeated'}`,
     roll: `${c?.name} rolls`,
@@ -149,7 +149,7 @@ function renderCenter(s) {
     case 'lobby':
       c.appendChild(el('div', 'waiting', `<div class="bigcode">${esc(s.code)}</div><small>${s.players.length < 2 ? 'two or more to begin' : 'press start on the host phone'}</small>`)); break;
     case 'propose':
-      c.appendChild(el('div', 'waiting', `${esc(current(s).name)} is writing a proposal…<small>proposal ${s.nextProposal}</small>`)); break;
+      c.appendChild(el('div', 'waiting', `${esc(current(s).name)} is ${s.redo ? 'rewriting' : 'writing'} a proposal…<small>proposal ${s.nextProposal}${s.redo ? ` · ${s.redo.n} was void` : ''}</small>`)); break;
     case 'vote':
     case 'result': {
       const p = s.proposal;

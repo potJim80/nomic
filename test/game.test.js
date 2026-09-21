@@ -383,15 +383,20 @@ test('setting: only known keys, numbers stay numbers, booleans stay booleans', (
   assert.equal(apply(s, { type: 'setting', key: 'dieSides', value: 'six' }), s);
 });
 
-test('void during a vote ends it as void: no penalty, no bonus, number spent', () => {
+test('void before the vote closes hands the turn back to the mover to rewrite: no penalty, number spent', () => {
   let s = table(3, { judge: true });
   s = apply(s, { type: 'propose', id: 'p0', text: 'Ada wins.' });
   s = apply(s, { type: 'vote', id: 'p1', yes: true });
   s = apply(s, { type: 'void', reason: 'rule 112' });
-  assert.equal(s.phase, 'result'); assert.equal(s.proposal.void, 'rule 112'); assert.equal(s.history[0].n, 301);
+  assert.equal(s.phase, 'propose'); assert.equal(current(s).id, 'p0'); assert.equal(s.proposal, null);
+  assert.deepEqual(s.redo, { n: 301, reason: 'rule 112' });
+  assert.equal(s.history[0].n, 301); assert.equal(s.history[0].void, 'rule 112');
   assert.deepEqual(scores(s), [0, 0, 0]);
-  s = advance(s); s = apply(s, { type: 'roll', id: 'p0', face: 2 });
-  assert.equal(s.phase, 'propose'); assert.equal(s.nextProposal, 302);
+  assert.equal(apply(s, { type: 'roll', id: 'p0' }), s, 'no roll until a proposal has been voted on');
+  s = apply(s, { type: 'propose', id: 'p0', text: 'Ada gets a point.' });
+  assert.equal(s.proposal.n, 302); assert.equal(s.redo, undefined);
+  s = voteAll(s); s = advance(s); s = apply(s, { type: 'roll', id: 'p0', face: 2 });
+  assert.equal(s.phase, 'propose'); assert.equal(current(s).id, 'p1'); assert.equal(s.nextProposal, 303);
 });
 
 test('void right after adoption undoes the enactment, amendment, repeal or transmutation and any dissenter bonus', () => {

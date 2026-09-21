@@ -45,6 +45,8 @@ When he wants a bot at the table ("add a bot", "play against me"):
   2"), watch the proposals and apply them: `judge.py adjust Ada 2 "rule 305: rhymed"`.
 - Void a proposal that breaks an immutable rule (110, 112, 114…) or is two changes in one
   (111): `judge.py void "rule 112: the win condition can't be changed to something other than points"`.
+  Do it *during the vote* and the mover gets the turn back to rewrite it, no penalty; the
+  reason shows on their phone, so make it the fix they need. After adoption, void undoes it.
 - Don't rule unprompted more than once in a while; the table plays, the Judge settles.
 - Never touch scores or rules for taste. Only for what the rules, as written, require.
 

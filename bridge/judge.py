@@ -9,7 +9,7 @@
   judge.py rule "text" [--for q3]       deliver a ruling (optionally answering question q3)
   judge.py adjust NAME DELTA "reason"   points by judgment
   judge.py set KEY VALUE                winScore unanimous dissenterBonus defeatPenalty dieSides maxMutable circuitsUntilMajority
-  judge.py void "reason"                void the proposal on the table (during the vote or right after)
+  judge.py void "reason"                void the proposal on the table: before the vote closes the mover rewrites it; after adoption it is undone
   judge.py strike N "reason"            remove rule N outright
   judge.py remove NAME                  remove a player from the table (rule 113)
   judge.py newgame                      same seats, fresh rules
