@@ -44,17 +44,24 @@ def fingerprint(s):
             tuple(p['score'] for p in s['players']), len(s.get('rulings', [])), s.get('judge', {}).get('present'))
 
 def watch(room, limit=600):
-    """Block until the state changes (or limit seconds). Returns the new state, or None."""
-    c = MQTT(room['broker']).connect(); c.subscribe(topic(room['code'], 'state'))
-    first = None; t0 = time.time()
+    """Block until the state changes (or limit seconds). Returns the new state, or None.
+    Reconnects if the broker drops an idle connection."""
+    first = None; t0 = time.time(); c = None
     while time.time() - t0 < limit:
-        got = None
-        for t, payload in c.messages(timeout=max(1, min(30, limit - (time.time() - t0)))):
-            if payload: got = json.loads(payload); break
+        try:
+            if c is None: c = MQTT(room['broker']).connect(); c.subscribe(topic(room['code'], 'state'))
+            got = None
+            for t, payload in c.messages(timeout=max(1, min(30, limit - (time.time() - t0)))):
+                if payload: got = json.loads(payload); break
+        except (ConnectionError, OSError):
+            try: c.close()
+            except Exception: pass
+            c = None; time.sleep(2); continue
         if got is None: continue
         if first is None: first = fingerprint(got); continue
         if fingerprint(got) != first: c.close(); return got
-    c.close(); return None
+    if c: c.close()
+    return None
 
 def current(s): return s['players'][s['turnIndex']] if s['players'] else None
 
