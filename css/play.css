@@ -43,3 +43,9 @@ button.big.aye { background: var(--aye); color: #fff; } button.big.big.nay { bac
 .die { font-family: var(--serif); font-size: 96px; text-align: center; color: var(--brass); line-height: 1; }
 .err { color: #d76c6c; font-size: 14px; }
 .note { font-size: 13px; color: var(--dim); font-style: italic; font-family: var(--serif); }
+button.big.ghost { background: transparent; border: 1px solid var(--line); color: var(--ink); font-weight: 500; }
+button.big.ghost.danger { color: #d76c6c; }
+.judgebox { margin-top: auto; padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.paper.ruling { border-left: 6px solid var(--brass); background: #efe6cf; }
+.paper.ruling .text { font-size: 17px; }
+.paper .dismiss { margin-top: 12px; background: none; border: 1px solid #c9bea1; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 14px; color: var(--paper-ink); }

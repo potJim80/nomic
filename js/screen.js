@@ -3,6 +3,7 @@ import { current, describe } from './game.js';
 import { Host } from './host.js';
 import { runDemo } from './demo.js';
 import { hostRoom } from './net.js';
+import { connectBridge } from './bridge.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -10,7 +11,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 
 let tab = 'immutable';
 let prev = null;          // last rendered state, for change detection
-let fx = { die: null };   // screen-only effects (a die mid-roll)
+let fx = { die: null, ruling: null };   // screen-only effects (a die mid-roll, a ruling being read out)
+let lastRulingId = null;
 
 export function render(s) {
   renderJoin(s);
@@ -23,9 +25,13 @@ export function render(s) {
   prev = s;
 }
 
+// Phones always join through the public page: when the screen runs off the local bridge
+// (so Claude can judge), "localhost" would mean nothing to them.
+const PUBLIC_PLAY_URL = 'https://potjim80.github.io/nomic/play.html';
 function renderJoin(s) {
   $('code').textContent = s.code || '····';
-  $('joinUrl').textContent = location.origin + location.pathname.replace(/[^/]*$/, '') + 'play.html';
+  const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+  $('joinUrl').textContent = local ? PUBLIC_PLAY_URL : location.origin + location.pathname.replace(/[^/]*$/, '') + 'play.html';
 }
 
 function renderStatus(s) {
@@ -41,6 +47,14 @@ function renderStatus(s) {
   }[s.phase] || '';
   const mut = s.rules.filter(r => r.mutable).length;
   $('rulesLine').textContent = `Turn ${s.turnNumber} · ${s.rules.length} rules (${mut} mutable) · ${s.settings.unanimous ? 'unanimity' : 'majority'} · first to ${s.settings.winScore}`;
+  const j = $('judgeLine');
+  if (!s.judge) j.hidden = true;
+  else {
+    j.hidden = false;
+    const open = s.requests.filter(r => !r.answered).length;
+    j.className = 'judgeline ' + (s.judge.present ? 'on' : '');
+    j.textContent = s.judge.present ? `⚖ ${s.judge.name} is judging${open ? ` · ${open} question${open > 1 ? 's' : ''} waiting` : ''}` : `⚖ Judge's seat empty`;
+  }
 }
 
 function renderLog(s) {
@@ -117,11 +131,21 @@ function renderMarker(s) {
 
 function renderCenter(s) {
   const c = $('center');
-  const key = fx.die ? 'die' : `${s.phase}:${s.proposal?.n}:${s.winner}:${s.code}`;
+  const newest = s.rulings[0];
+  if (newest && newest.id !== lastRulingId) {
+    lastRulingId = newest.id;
+    if (prev) { fx.ruling = newest; clearTimeout(fx.rulingTimer); fx.rulingTimer = setTimeout(() => { fx.ruling = null; if (prev) render(prev); }, 12000); }
+  }
+  const key = fx.die ? 'die' : fx.ruling ? 'ruling:' + fx.ruling.id : `${s.phase}:${s.proposal?.n}:${s.winner}:${s.code}`;
   if (c.dataset.key === key) { if (s.phase === 'vote') updateTally(s); return; }
   c.dataset.key = key;
   c.replaceChildren();
   if (fx.die) { c.appendChild(dieEl(fx.die)); return; }
+  if (fx.ruling) {
+    const q = s.requests.find(r => r.id === fx.ruling.requestId);
+    c.appendChild(el('div', 'paper ruling', `<div class="n">Judgment${q ? ` · asked by ${esc(q.byName)}` : ''}</div>${q ? `<div class="kind">“${esc(q.text)}”</div>` : ''}<div class="text">${esc(fx.ruling.text)}</div>`));
+    return;
+  }
   switch (s.phase) {
     case 'lobby':
       c.appendChild(el('div', 'waiting', `<div class="bigcode">${esc(s.code)}</div><small>${s.players.length < 2 ? 'two or more to begin' : 'press start on the host phone'}</small>`)); break;
@@ -138,7 +162,7 @@ function renderCenter(s) {
       c.appendChild(el('div', 'waiting', `${esc(current(s).name)} to roll<small>press roll on your phone</small>`)); break;
     case 'over': {
       const w = s.players.find(p => p.id === s.winner);
-      c.appendChild(el('div', 'winner', `<div class="sub">Rule ${s.settings.winScore === 100 ? '208' : '208 as amended'}</div><div class="who">${esc(w?.name)}</div><div class="sub">wins with ${w?.score}</div>`)); break;
+      c.appendChild(el('div', 'winner', `<div class="sub">Rule 208</div><div class="who">${esc(w?.name)}</div><div class="sub">wins with ${w?.score} · press N for a new game</div>`)); break;
     }
   }
 }
@@ -176,6 +200,7 @@ window.addEventListener('resize', () => { if (prev) { renderSeats(prev); renderM
 
 const host = new Host({ render, showDie });
 window.nomic = host;
+connectBridge(host);
 if (new URLSearchParams(location.search).has('demo')) runDemo(host);
 else if (window.Peer) openRoom();
 
@@ -185,6 +210,7 @@ function openRoom() {
     onLeave: (id) => host.dispatch({ type: 'leave', id }),
   });
   host.onChange(s => room.broadcast(s));
+  window.nomicRoom = room;
   room.ready.then(() => drawQr(), (e) => { if (e.message === 'code-taken') location.reload(); });
 }
 
@@ -198,4 +224,5 @@ function drawQr() {
 // Keyboard on the host computer: Enter starts the game, N starts a new one after it ends.
 window.addEventListener('keydown', e => {
   if (e.key === 'Enter' && host.state.phase === 'lobby') host.dispatch({ type: 'start' });
+  if (e.key.toLowerCase() === 'n' && host.state.phase === 'over') host.dispatch({ type: 'newgame' });
 });

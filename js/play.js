@@ -8,7 +8,7 @@ const store = { get: (k) => { try { return localStorage.getItem('nomic.' + k); }
 
 let me = store.get('id') || (Math.random().toString(36).slice(2, 10));
 store.set('id', me);
-let room = null, state = null, view = 'play', status = '', voted = null, draft = { kind: 'enact', target: '', text: '' };
+let room = null, state = null, view = 'play', status = '', draft = { kind: 'enact', target: '', text: '' }, asking = false, seenRuling = null;
 
 const params = new URLSearchParams(location.search);
 const startCode = (params.get('code') || store.get('code') || '').toUpperCase();
@@ -35,7 +35,7 @@ function connect(code, name) {
   $('#view').innerHTML = `<h2>Finding the table…</h2><p>Code ${esc(code)}</p>`;
   room = joinRoom(code, {
     id: me, name,
-    onState: (s) => { state = s; render(); },
+    onState: (s) => { try { state = s; render(); } catch (e) { console.error('render failed', e); } },
     onStatus: (st) => {
       status = st;
       $('#status').textContent = { connecting: 'connecting', open: 'connected', closed: 'reconnecting…', error: 'connection error', 'no-room': 'no table with that code' }[st] || st;
@@ -83,8 +83,8 @@ function render() {
 
     case 'result': {
       const pr = state.proposal;
-      v.innerHTML = `${paper(pr)}<h1>${pr.adopted ? 'Adopted' : (pr.void ? 'Void' : 'Defeated')} ${pr.yes}–${pr.no}</h1>
-        <p>${pr.adopted ? `Rule ${pr.n} is now in effect.` : pr.by === me ? `You lose ${state.settings.defeatPenalty} (rule 206).` : `${esc(cur.name)} loses ${state.settings.defeatPenalty}.`}</p>`;
+      v.innerHTML = `${paper(pr)}<h1>${pr.adopted ? 'Adopted' : (pr.void ? 'Void' : 'Defeated')}${pr.void && !pr.yes && !pr.no ? '' : ` ${pr.yes}–${pr.no}`}</h1>
+        <p>${pr.adopted ? `Rule ${pr.n} is now in effect.` : pr.void ? `Void: ${esc(pr.void)}. No penalty.` : pr.by === me ? `You lose ${state.settings.defeatPenalty} (rule 206).` : `${esc(cur.name)} loses ${state.settings.defeatPenalty}.`}</p>`;
       break;
     }
 
@@ -96,10 +96,35 @@ function render() {
 
     case 'over': {
       const w = state.players.find(p => p.id === state.winner);
-      v.innerHTML = `<h1>${w.id === me ? 'You win.' : esc(w.name) + ' wins.'}</h1><div class="score">${w.score}</div><p>Rule 208. The table can start again from the screen.</p>`;
+      v.innerHTML = `<h1>${w ? (w.id === me ? 'You win.' : esc(w.name) + ' wins.') : 'Game over.'}</h1>${w ? `<div class="score">${w.score}</div>` : ''}<p>Rule 208. The table can start again from the screen.</p>`;
       break;
     }
   }
+  if (state.phase !== 'lobby' && state.phase !== 'over') judgeBits(v);
+}
+
+function judgeBits(v) {
+  if (!state.judge) return;
+  const r = state.rulings[0];
+  if (r && r.id !== seenRuling) {
+    const q = state.requests.find(x => x.id === r.requestId);
+    const b = document.createElement('div'); b.className = 'paper ruling';
+    b.innerHTML = `<div class="n">Judgment${q ? ' · ' + esc(q.byName) + ' asked' : ''}</div>${q ? `<div class="kind">“${esc(q.text)}”</div>` : ''}<div class="text">${esc(r.text)}</div><button class="dismiss">Got it</button>`;
+    b.querySelector('.dismiss').onclick = () => { seenRuling = r.id; render(); };
+    v.prepend(b);
+  }
+  const mine = state.requests.filter(q => q.by === me && !q.answered).length;
+  const d = document.createElement('div'); d.className = 'judgebox';
+  if (!state.judge.present) d.innerHTML = `<p class="hint">⚖ The Judge's seat is empty right now.</p>`;
+  else if (asking) {
+    d.innerHTML = `<label>Your question for the Judge</label><textarea id="q" placeholder="What are you asking the Judge to settle?"></textarea><div class="row"><button class="big" id="ask">Invoke judgment</button><button class="big ghost" id="cancel">Never mind</button></div>`;
+    d.querySelector('#ask').onclick = () => { const t = d.querySelector('#q').value.trim(); if (!t) return; send({ type: 'judgment', text: t }); asking = false; render(); };
+    d.querySelector('#cancel').onclick = () => { asking = false; render(); };
+  } else {
+    d.innerHTML = `<button class="big ghost" id="invoke">⚖ Invoke judgment</button>${mine ? `<p class="hint">Your question is with the Judge.</p>` : ''}`;
+    d.querySelector('#invoke').onclick = () => { asking = true; render(); };
+  }
+  v.appendChild(d);
 }
 
 function paper(pr) {
@@ -135,8 +160,11 @@ function renderRules() {
 function renderTable() {
   $('#view').innerHTML = `<h1>The table</h1><p>Code ${esc(state.code)} · turn ${state.turnNumber}</p>
     <ol class="players">${state.players.map((p, i) => `<li class="${i === state.turnIndex && state.phase !== 'lobby' ? 'cur' : ''}"><span>${esc(p.name)}${p.connected ? '' : ' (away)'}</span><span class="pts">${p.score}</span></li>`).join('')}</ol>
+    ${state.judge ? `<h2>Rulings</h2><ol class="rules">${state.rulings.map(r => `<li>${esc(r.text)}<small>${esc(state.requests.find(q => q.id === r.requestId)?.byName || 'unprompted')}</small></li>`).join('') || '<li class="note">None yet.</li>'}</ol>` : ''}
     <h2>Past proposals</h2>
-    <ol class="rules">${state.history.map(h => `<li><b>${h.n}</b>${esc(h.text || describe(state, h))}<small>${esc(h.byName)} · ${h.adopted ? 'adopted' : 'defeated'} ${h.yes}–${h.no}</small></li>`).join('') || '<li class="note">None yet.</li>'}</ol>`;
+    <ol class="rules">${state.history.map(h => `<li><b>${h.n}</b>${esc(h.text || describe(state, h))}<small>${esc(h.byName)} · ${h.adopted ? 'adopted' : 'defeated'} ${h.yes}–${h.no}</small></li>`).join('') || '<li class="note">None yet.</li>'}</ol>
+    ${state.players.find(p => p.id === me) && state.phase !== 'over' ? `<button class="big ghost danger" id="forfeit">Forfeit and leave the table</button><p class="hint">Rule 113. Your seat closes; play continues without you.</p>` : ''}`;
+  $('#forfeit') && ($('#forfeit').onclick = () => { if (confirm('Leave the game for good?')) send({ type: 'forfeit' }); });
 }
 
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {

@@ -16,6 +16,8 @@ aside { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .qr svg { width: 132px; height: 132px; border-radius: 6px; background: #fff; padding: 6px; display: block; }
 .turnline { font-family: var(--serif); font-size: 22px; line-height: 1.2; }
 .ruleline { color: var(--dim); font-size: 13px; margin-top: 6px; }
+.judgeline { color: var(--dim); font-size: 13px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.judgeline.on { color: var(--brass); }
 .log { list-style: none; margin: 0; padding: 0 4px; overflow: hidden; flex: 1; font-size: 13px; color: var(--dim); }
 .log li { padding: 5px 0; border-bottom: 1px solid var(--line); animation: fade .5s ease both; }
 .log li:first-child { color: var(--ink); }
@@ -76,6 +78,8 @@ aside { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .paper .kind { font-style: italic; color: #5e5340; margin-bottom: 8px; font-size: 15px; }
 .paper .text { font-size: 17px; line-height: 1.38; max-height: 8.3em; overflow: hidden; }
 .paper .tally { margin-top: 10px; font-family: var(--sans); font-size: 13px; color: #7a6a48; }
+.paper.ruling { background: #efe6cf; border-left: 6px solid var(--brass); }
+.paper.ruling .kind { font-size: 15px; }
 .stamp { position: absolute; right: 18px; top: 14px; padding: 6px 14px; border: 4px solid; border-radius: 6px; font-family: var(--sans); font-weight: 800; font-size: 22px; letter-spacing: .12em; text-transform: uppercase;
   transform: rotate(-12deg) scale(3); opacity: 0; animation: stamp .45s cubic-bezier(.2,1.4,.4,1) .2s both; mix-blend-mode: multiply; }
 .stamp.adopted { color: #2f7b3b; } .stamp.defeated { color: #a33; }

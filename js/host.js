@@ -5,8 +5,10 @@ import { newGame, apply, advance, current } from './game.js';
 export class Host {
   constructor({ render, showDie }) {
     this.render = render; this.showDie = showDie;
-    const want = new URLSearchParams(location.search).get('code');   // ?code=ABCD pins the code (testing)
-    this.state = newGame(want ? want.toUpperCase().slice(0, 4) : makeCode());
+    const params = new URLSearchParams(location.search);
+    const want = params.get('code');   // ?code=ABCD pins the code (testing)
+    const judge = params.has('bridge') || ['localhost', '127.0.0.1'].includes(location.hostname);   // served by the bridge → Claude can judge
+    this.state = newGame(want ? want.toUpperCase().slice(0, 4) : makeCode(), { judge });
     this.queue = Promise.resolve();
     this.listeners = [];
     this.render(this.state);

@@ -27,6 +27,7 @@ export function hostRoom(code, { onAction, onLeave }) {
     ready,
     send(conn, state) { if (conn.open) conn.send({ type: 'state', state }); },
     broadcast(state) { for (const { conn } of conns.values()) if (conn.open) conn.send({ type: 'state', state }); },
+    peers() { return [...conns.values()].map(c => ({ id: c.playerId, open: c.conn.open })); },
   };
 }
 

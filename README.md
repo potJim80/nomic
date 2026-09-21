@@ -17,10 +17,17 @@ js/net.js         PeerJS host/join plumbing
 css/
 ```
 
-Rule text is free text: players judge what a rule means, the app only enforces numbering,
+Rule text is free text: players (or Claude, as the Judge — see CLAUDE.md) judge what a rule means, the app only enforces numbering,
 votes, dice, scoring and the 100-point win, as the Initial Set states them.
 
 ## Testing locally
 
 `python3 -m http.server 8000` in this folder, open `http://localhost:8000/` on the screen,
 phones on the same wifi open the address shown on screen.
+
+## Claude Code as the Judge
+
+`bridge/nomic-bridge.py` serves the game at `http://localhost:8787/` and relays between the
+screen and `bridge/judge.py`, which Claude Code drives: it reads the live state, answers
+players' questions ("Invoke judgment" on the phone), adjusts points and settings as adopted
+rules demand, and can void a proposal. Rule 214 (in `js/game.js`) seats the Judge.
