@@ -13,6 +13,7 @@
   judge.py strike N "reason"            remove rule N outright
   judge.py remove NAME                  remove a player from the table (rule 113)
   judge.py newgame                      same seats, fresh rules
+  judge.py note "text"                  a line in the table's log (not a ruling, not read aloud)
 """
 import sys
 from table import *
@@ -54,6 +55,7 @@ def main(argv):
         if not p: sys.exit('no such player')
         cmd_send(room, {'type': 'forfeit', 'id': p['id']})
     elif cmd == 'newgame': cmd_send(room, {'type': 'newgame'})
+    elif cmd == 'note': cmd_send(room, {'type': 'note', 'text': args[0]})
     else: sys.exit('unknown command; judge.py --help')
 
 if __name__ == '__main__':

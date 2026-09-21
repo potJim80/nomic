@@ -216,6 +216,11 @@ export function apply(state, action) {
       return s;
     }
 
+    case 'note': {       // a line in the log, nothing more
+      say(String(action.text || '').slice(0, 200));
+      return s;
+    }
+
     case 'newgame': {    // same table, fresh rules and scores
       const next = newGame(s.code);
       next.players = s.players.map((p, i) => ({ ...p, score: 0, color: COLORS[i % COLORS.length] }));

@@ -7,14 +7,19 @@ export class Host {
     this.render = render; this.showDie = showDie;
     const params = new URLSearchParams(location.search);
     const want = params.get('code');   // ?code=ABCD pins the code (testing)
-    this.state = newGame(want ? want.toUpperCase().slice(0, 4) : makeCode());
-    this.judgeKey = params.get('key') || makeCode(8);   // never in the state; only on this screen
+    // A reload resumes the game in progress (same code, key, scores) unless ?new is given,
+    // so the screen can be reloaded for new code mid-game without losing the table.
+    const saved = !want && !params.has('new') ? loadSaved() : null;
+    this.state = saved?.state || newGame(want ? want.toUpperCase().slice(0, 4) : makeCode());
+    this.judgeKey = saved?.judgeKey || params.get('key') || makeCode(8);   // never in the state; only on this screen
+    this.resumed = !!saved;
     this.queue = Promise.resolve();
     this.listeners = [];
     this.render(this.state);
   }
   onChange(fn) { this.listeners.push(fn); }
-  set(s) { this.state = s; this.render(s); this.listeners.forEach(f => f(s)); }
+  set(s) { this.state = s; this.render(s); this.listeners.forEach(f => f(s)); this.save(); }
+  save() { try { localStorage.setItem('nomic.host', JSON.stringify({ state: this.state, judgeKey: this.judgeKey, at: Date.now() })); } catch {} }
 
   // Every action goes through here, one at a time, so pacing can't be interrupted.
   dispatch(action) {
@@ -42,6 +47,16 @@ export class Host {
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function loadSaved() {
+  try {
+    const d = JSON.parse(localStorage.getItem('nomic.host') || 'null');
+    if (!d || Date.now() - d.at > 6 * 3600e3) return null;         // older than six hours: start fresh
+    if (d.state.phase === 'over' || (d.state.phase === 'lobby' && d.state.players.length === 0)) return null;
+    for (const p of d.state.players) p.connected = false;            // phones will say hello again
+    return d;
+  } catch { return null; }
+}
 
 // Consonants only, so it never spells anything.
 function makeCode(n = 4) {

@@ -214,7 +214,7 @@ function openRoom() {
   $('judgeKey').textContent = host.judgeKey;
   host.onChange(s => room.broadcast(s));
   window.nomicRoom = room;
-  room.ready.then(() => { drawQr(); room.broadcast(host.state); }, () => { $('turnLine').textContent = 'No connection — check the internet and reload.'; });
+  room.ready.then(() => { drawQr(); room.broadcast(host.state); if (host.resumed) host.dispatch({ type: 'note', text: 'Screen reloaded; game resumed.' }); }, () => { $('turnLine').textContent = 'No connection — check the internet and reload.'; });
 }
 
 function drawQr() {
@@ -228,5 +228,6 @@ function drawQr() {
 window.addEventListener('keydown', e => {
   if (e.key === 'Enter' && host.state.phase === 'lobby') host.dispatch({ type: 'start' });
   if (e.key.toLowerCase() === 'n' && host.state.phase === 'over') host.dispatch({ type: 'newgame' });
+  if (e.key === 'Escape' && e.shiftKey && confirm('Abandon this game and open a fresh table?')) { localStorage.removeItem('nomic.host'); location.href = location.pathname + '?new'; }
   if (e.key.toLowerCase() === 'v' && !document.getElementById('voiceDialog')?.open) openVoiceDialog();
 });

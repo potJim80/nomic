@@ -25,6 +25,9 @@ votes, dice, scoring and the 100-point win, as the Initial Set states them.
 `python3 -m http.server 8000` in this folder, open `http://localhost:8000/` on the screen,
 phones on the same wifi open the address shown on screen.
 
+Reloading the screen resumes the game in progress (same code, key and scores; phones reconnect
+on their own). Shift+Escape on the screen abandons it and opens a fresh table.
+
 ## Claude Code as the Judge, or as a player
 
 `bridge/judge.py` and `bridge/bot.py` talk to the game through the same broker the phones use
