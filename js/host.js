@@ -5,7 +5,8 @@ import { newGame, apply, advance, current } from './game.js';
 export class Host {
   constructor({ render, showDie }) {
     this.render = render; this.showDie = showDie;
-    this.state = newGame(makeCode());
+    const want = new URLSearchParams(location.search).get('code');   // ?code=ABCD pins the code (testing)
+    this.state = newGame(want ? want.toUpperCase().slice(0, 4) : makeCode());
     this.queue = Promise.resolve();
     this.listeners = [];
     this.render(this.state);

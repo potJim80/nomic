@@ -2,6 +2,7 @@
 import { current, describe } from './game.js';
 import { Host } from './host.js';
 import { runDemo } from './demo.js';
+import { hostRoom } from './net.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -176,3 +177,25 @@ window.addEventListener('resize', () => { if (prev) { renderSeats(prev); renderM
 const host = new Host({ render, showDie });
 window.nomic = host;
 if (new URLSearchParams(location.search).has('demo')) runDemo(host);
+else if (window.Peer) openRoom();
+
+function openRoom() {
+  const room = hostRoom(host.state.code, {
+    onAction: (a, conn) => host.dispatch(a).then(() => room.send(conn, host.state)),
+    onLeave: (id) => host.dispatch({ type: 'leave', id }),
+  });
+  host.onChange(s => room.broadcast(s));
+  room.ready.then(() => drawQr(), (e) => { if (e.message === 'code-taken') location.reload(); });
+}
+
+function drawQr() {
+  if (!window.qrcode) return;
+  const url = $('joinUrl').textContent + '?code=' + host.state.code;
+  const q = qrcode(0, 'M'); q.addData(url); q.make();
+  $('qr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+}
+
+// Keyboard on the host computer: Enter starts the game, N starts a new one after it ends.
+window.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && host.state.phase === 'lobby') host.dispatch({ type: 'start' });
+});

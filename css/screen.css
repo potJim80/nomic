@@ -13,7 +13,7 @@ aside { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .url { font-size: 16px; color: var(--ink); word-break: break-all; margin-bottom: 14px; }
 .code { font-family: var(--serif); font-size: 54px; font-weight: 600; letter-spacing: .08em; line-height: 1; color: var(--brass); }
 .qr { margin-top: 14px; }
-.qr canvas, .qr img { width: 132px; height: 132px; image-rendering: pixelated; border-radius: 6px; background: #fff; padding: 6px; }
+.qr svg { width: 132px; height: 132px; border-radius: 6px; background: #fff; padding: 6px; display: block; }
 .turnline { font-family: var(--serif); font-size: 22px; line-height: 1.2; }
 .ruleline { color: var(--dim); font-size: 13px; margin-top: 6px; }
 .log { list-style: none; margin: 0; padding: 0 4px; overflow: hidden; flex: 1; font-size: 13px; color: var(--dim); }
