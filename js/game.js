@@ -35,7 +35,7 @@ export function newGame(code, { judge = false } = {}) {
     history: [],            // past proposals with outcome
     lastRoll: null,
     winner: null,
-    judge: judge ? { name: 'Claude', present: false } : null,
+    judge: { name: 'Claude', present: !!judge },   // the Judge's seat (rule 214) — filled when Claude sits
     requests: [],           // judgment requests: { id, by, byName, text, at, answered }
     rulings: [],            // the Judge's rulings, newest first: { id, text, at, requestId }
     settings: { ...DEFAULT_SETTINGS },
@@ -72,7 +72,7 @@ export function apply(state, action) {
     case 'start': {
       if (s.phase !== 'lobby' || s.players.length < 2) return state;
       s.phase = 'propose'; s.turnNumber = 1; s.turnIndex = 0;
-      if (s.judge) { s.rules.push({ ...JUDGE_RULE }); say(`Rule 214 in effect: ${s.judge.name} is the Judge.`); }
+      if (s.judge.present) seatJudge(s, say);
       say(`Game begins. ${s.players[0].name} to propose.`);
       return s;
     }
@@ -158,7 +158,7 @@ export function apply(state, action) {
     }
 
     case 'judgment': {   // a player invokes Judgment
-      if (!s.judge) return state;
+      if (!s.judge.present) return state;
       const p = s.players.find(p => p.id === action.id);
       const text = String(action.text || '').trim().slice(0, 500);
       if (!p || !text) return state;
@@ -199,22 +199,31 @@ export function apply(state, action) {
     }
 
     case 'judge': {      // the Judge sits down or gets up
-      if (!s.judge) return state;
+      const was = s.judge.present;
       s.judge.present = !!action.present;
       if (action.name) s.judge.name = String(action.name).slice(0, 16);
+      if (s.judge.present && !was) { say(`${s.judge.name} takes the Judge's seat.`); if (s.phase !== 'lobby' && s.phase !== 'over') seatJudge(s, say); }
+      if (!s.judge.present && was) say(`${s.judge.name} leaves the Judge's seat.`);
       return s;
     }
 
     case 'newgame': {    // same table, fresh rules and scores
-      const next = newGame(s.code, { judge: !!s.judge });
+      const next = newGame(s.code);
       next.players = s.players.map((p, i) => ({ ...p, score: 0, color: COLORS[i % COLORS.length] }));
-      if (s.judge) next.judge = { ...s.judge };
+      next.judge = { ...s.judge };
       next.log.unshift({ t: 'New game.', at: Date.now() });
       return next;
     }
 
     default: return state;
   }
+}
+
+// Rule 214 comes into effect when the Judge is seated — at the start, or mid-game if Claude sits down late.
+function seatJudge(s, say) {
+  if (s.rules.some(r => r.n === JUDGE_RULE.n || r.transmuted === JUDGE_RULE.n || r.amends === JUDGE_RULE.n)) return;
+  s.rules.push({ ...JUDGE_RULE });
+  say(`Rule 214 in effect: ${s.judge.name} is the Judge.`);
 }
 
 export function current(s) { return s.players[s.turnIndex]; }
@@ -226,7 +235,7 @@ export function describe(s, p) {
   return { enact: 'enact a new rule', amend: `amend ${t}`, repeal: `repeal ${t}`, transmute: `transmute ${t}` }[p.kind];
 }
 
-const who = (s, a) => a.by === 'judge' && s.judge ? `The Judge` : 'The table';
+const who = (s, a) => a.by === 'judge' ? `The Judge` : 'The table';
 
 // Rule 203 (unanimity / majority), 109 (transmutation is always unanimous), 204 (dissenter bonus),
 // 206 (defeat penalty), 108 (numbering), 209 (mutable cap), 114 (there must be a mutable rule).

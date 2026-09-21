@@ -4,20 +4,33 @@ This repo is Peter Suber's Nomic as a party game: `index.html` is the big screen
 the game), `play.html` runs on phones. Plain HTML/JS, no build. `npm test` runs the mechanics
 suite (`test/game.test.js`) — run it after any change to `js/game.js`.
 
-## Judging a game
+## Judging a game, or playing in it
 
-When Mahdi says something like "be the judge", "sit at the table", "judge our game":
+The screen (`index.html`, anywhere — usually https://potjim80.github.io/nomic/) shows a
+**room code** and, under the QR code, a **Judge key**. Mahdi reads both to you. Everything
+below talks to the game through the public broker; nothing runs on the screen's machine.
+`bridge/mqttws.py` is a stdlib MQTT-over-websocket client; no installs.
 
-1. Start the bridge if it isn't running: `python3 bridge/nomic-bridge.py` (background).
-   It serves the game at **http://localhost:8787/** — the screen must be opened from *that*
-   address (not github.io) for the Judge to be connected. Phones can use either.
-2. `python3 bridge/judge.py sit` — the screen shows "⚖ Claude is judging" and rule 214 comes
-   into effect when the game starts.
+When Mahdi says "be the judge", "sit at the table", "judge our game":
+
+1. `python3 bridge/judge.py join CODE KEY` — finds the room, remembers it.
+2. `python3 bridge/judge.py sit` — the screen shows "⚖ Claude is judging"; rule 214 is in
+   effect (at the start, or at once if the game is already on).
 3. Loop: `python3 bridge/judge.py wait` blocks until something happens and prints the table.
-   Then decide, act, and wait again. Keep it up until told to stop or the game is over.
-   Reading: `judge.py status`, `judge.py rules`, `judge.py history`; the raw state is
-   `~/.config/nomic/state.json`.
+   Decide, act, wait again. Keep going until told to stop or the game is over.
+   Reading: `judge.py status`, `judge.py rules`, `judge.py history`.
 4. `python3 bridge/judge.py leave` when done.
+
+When he wants a bot at the table ("add a bot", "play against me"):
+
+- `python3 bridge/bot.py join NAME` (lobby only; `--code CODE` if you haven't joined as judge).
+- `bot.py status` says what's asked of the bot; `bot.py wait` blocks until the table changes.
+  On its turn: `bot.py propose "…"` / `amend N "…"` / `repeal N` / `transmute N`, then
+  `bot.py roll` after the vote. During a vote: `bot.py vote aye|nay`. `bot.py ask "…"` invokes
+  Judgment. The bot plays to win under the rules as written, and proposes rules that are
+  short, testable, and mischievous rather than broken — it's a game.
+- Judge and bot can be the same session. Keep the two hats apart: the Judge does not favour
+  the bot, and says so if asked.
 
 ### What a good Judge does
 

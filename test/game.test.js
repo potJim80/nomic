@@ -340,6 +340,13 @@ test('a game with a Judge enacts rule 214 at the start; without one, nothing cha
   assert.deepEqual(j.rules.at(-1), JUDGE_RULE); assert.equal(j.rules.length, 30);
   assert.equal(table(2).rules.length, 29);
   assert.equal(apply(table(2), { type: 'judgment', id: 'p0', text: 'hey' }).requests.length, 0, 'no judge, no requests');
+  // sitting down mid-game seats rule 214 once; getting up and sitting again does not duplicate it
+  let s = table(2);
+  s = apply(s, { type: 'judge', present: true });
+  assert.equal(s.rules.filter(r => r.n === 214).length, 1);
+  s = apply(s, { type: 'judge', present: false }); s = apply(s, { type: 'judge', present: true });
+  assert.equal(s.rules.filter(r => r.n === 214).length, 1);
+  assert.equal(apply(newGame('X'), { type: 'judge', present: true }).rules.length, 29, 'in the lobby it waits for the start');
 });
 
 test('judgment requests queue with context; rulings answer them; blanks are ignored', () => {

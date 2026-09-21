@@ -12,10 +12,15 @@ const rid = () => Math.random().toString(36).slice(2, 10);
 const parse = (buf) => { try { return JSON.parse(new TextDecoder().decode(buf)); } catch { return null; } };
 const opts = (extra = {}) => ({ clientId: 'nomic-' + rid(), clean: true, connectTimeout: 8000, reconnectPeriod: 2000, keepalive: 30, ...extra });
 
+// Actions a phone may send. Everything else is the table's or the Judge's business.
+const PLAYER_ACTIONS = new Set(['start', 'propose', 'vote', 'roll', 'forfeit', 'judgment']);
+
 // The screen. Tries the brokers in order and uses the first that connects.
-export function hostRoom(code, { onAction, onLeave }) {
+// judgeKey: shown on the screen; the Judge's commands must carry it.
+export function hostRoom(code, { onAction, onLeave, judgeKey }) {
   const secrets = new Map();          // playerId -> secret from its first hello
   let client = null, lastState = null;
+  const events = [];                  // connection log, for debugging from the console
   const ready = new Promise((resolve, reject) => {
     let i = 0;
     const tryNext = () => {
@@ -28,6 +33,7 @@ export function hostRoom(code, { onAction, onLeave }) {
         c.end(true);
         // reconnect for real, with auto-reconnect on
         client = mqtt.connect(url, opts());
+        for (const ev of ['connect', 'reconnect', 'close', 'offline', 'error', 'disconnect']) client.on(ev, (e) => events.push(`${Date.now() % 100000} ${ev} ${e?.message || ''}`));
         client.on('connect', () => { client.subscribe(topic(code, 'host'), { qos: 1 }); if (lastState) publish(lastState); });
         client.on('message', (t, buf) => {
           const msg = parse(buf); if (!msg || typeof msg !== 'object') return;
@@ -38,8 +44,15 @@ export function hostRoom(code, { onAction, onLeave }) {
             return;
           }
           if (msg.type === 'leave') { if (secrets.get(msg.id) === msg.secret) onLeave(msg.id); return; }
+          if (msg.by === 'judge') {                              // the Judge's hand, keyed to this screen
+            if (!judgeKey || msg.key !== judgeKey) return;
+            const { key, ...action } = msg;
+            onAction(action);
+            return;
+          }
+          if (!PLAYER_ACTIONS.has(msg.type)) return;
           if (secrets.get(msg.id) !== msg.secret) return;   // a phone may only act as the player it introduced
-          const { secret, ...action } = msg;
+          const { secret, by, ...action } = msg;
           onAction(action);
         });
         resolve(url);
@@ -50,10 +63,11 @@ export function hostRoom(code, { onAction, onLeave }) {
   });
   const publish = (state) => {
     lastState = state;
+    events.push(`${Date.now() % 100000} publish ${client?.connected ? 'ok' : 'SKIPPED (not connected)'} phase=${state.phase}`);
     if (client?.connected) client.publish(topic(code, 'state'), JSON.stringify({ ...state, stamp: Date.now() }), { qos: 0, retain: true });
   };
   window.addEventListener('pagehide', () => { try { client?.publish(topic(code, 'state'), '', { retain: true }); } catch {} });
-  return { ready, send: (_, state) => publish(state), broadcast: publish, peers: () => [...secrets.keys()] };
+  return { ready, send: (_, state) => publish(state), broadcast: publish, peers: () => [...secrets.keys()], events };
 }
 
 // A phone. Listens on every broker for the room's state and settles on whichever has it.

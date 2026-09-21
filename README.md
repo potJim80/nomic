@@ -25,9 +25,10 @@ votes, dice, scoring and the 100-point win, as the Initial Set states them.
 `python3 -m http.server 8000` in this folder, open `http://localhost:8000/` on the screen,
 phones on the same wifi open the address shown on screen.
 
-## Claude Code as the Judge
+## Claude Code as the Judge, or as a player
 
-`bridge/nomic-bridge.py` serves the game at `http://localhost:8787/` and relays between the
-screen and `bridge/judge.py`, which Claude Code drives: it reads the live state, answers
-players' questions ("Invoke judgment" on the phone), adjusts points and settings as adopted
-rules demand, and can void a proposal. Rule 214 (in `js/game.js`) seats the Judge.
+`bridge/judge.py` and `bridge/bot.py` talk to the game through the same broker the phones use
+(`bridge/mqttws.py`, standard library only). Given the room code and the Judge key shown on the
+screen, Claude Code can answer players' questions ("Invoke judgment" on the phone), adjust
+points and settings as adopted rules demand, void a proposal — or take a seat and play.
+Rule 214 (in `js/game.js`) seats the Judge. See `CLAUDE.md`.

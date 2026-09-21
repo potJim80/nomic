@@ -3,7 +3,6 @@ import { current, describe } from './game.js';
 import { Host } from './host.js';
 import { runDemo } from './demo.js';
 import { hostRoom } from './net.js';
-import { connectBridge } from './bridge.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -200,7 +199,6 @@ window.addEventListener('resize', () => { if (prev) { renderSeats(prev); renderM
 
 const host = new Host({ render, showDie });
 window.nomic = host;
-connectBridge(host);
 if (new URLSearchParams(location.search).has('demo')) runDemo(host);
 else if (window.mqtt) openRoom();
 
@@ -208,7 +206,9 @@ function openRoom() {
   const room = hostRoom(host.state.code, {
     onAction: (a) => host.dispatch(a),
     onLeave: (id) => host.dispatch({ type: 'leave', id }),
+    judgeKey: host.judgeKey,
   });
+  $('judgeKey').textContent = host.judgeKey;
   host.onChange(s => room.broadcast(s));
   window.nomicRoom = room;
   room.ready.then(() => { drawQr(); room.broadcast(host.state); }, () => { $('turnLine').textContent = 'No connection — check the internet and reload.'; });

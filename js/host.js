@@ -7,8 +7,8 @@ export class Host {
     this.render = render; this.showDie = showDie;
     const params = new URLSearchParams(location.search);
     const want = params.get('code');   // ?code=ABCD pins the code (testing)
-    const judge = params.has('bridge') || ['localhost', '127.0.0.1'].includes(location.hostname);   // served by the bridge → Claude can judge
-    this.state = newGame(want ? want.toUpperCase().slice(0, 4) : makeCode(), { judge });
+    this.state = newGame(want ? want.toUpperCase().slice(0, 4) : makeCode());
+    this.judgeKey = params.get('key') || makeCode(8);   // never in the state; only on this screen
     this.queue = Promise.resolve();
     this.listeners = [];
     this.render(this.state);
@@ -43,8 +43,8 @@ export class Host {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// Four letters, no vowels, so it never spells anything.
-function makeCode() {
+// Consonants only, so it never spells anything.
+function makeCode(n = 4) {
   const L = 'BCDFGHJKLMNPQRSTVWXZ';
-  return Array.from({ length: 4 }, () => L[Math.floor(Math.random() * L.length)]).join('');
+  return Array.from({ length: n }, () => L[Math.floor(Math.random() * L.length)]).join('');
 }
