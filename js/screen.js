@@ -16,6 +16,8 @@ let lastRulingId = null;
 
 export function render(s) {
   narrate(prev, s);
+  renderNow(s);
+  renderToasts(s);
   renderJoin(s);
   renderStatus(s);
   renderLog(s);
@@ -33,6 +35,43 @@ function renderJoin(s) {
   $('code').textContent = s.code || '····';
   const local = ['localhost', '127.0.0.1'].includes(location.hostname);
   $('joinUrl').textContent = local ? PUBLIC_PLAY_URL : location.origin + location.pathname.replace(/[^/]*$/, '') + 'play.html';
+}
+
+// The strip above the table: what is happening right now and who we are waiting for.
+function renderNow(s) {
+  const n = $('now');
+  const c = current(s);
+  const away = (p) => p.connected ? '' : ' (away)';
+  let text = '', who = '';
+  switch (s.phase) {
+    case 'lobby': text = s.players.length < 2 ? 'Waiting for players' : 'Ready to begin'; who = s.players.length < 2 ? `${s.players.length} seated — two or more to start` : `${s.players[0].name} presses Start (or Enter here)`; break;
+    case 'propose': text = s.redo ? `${c.name} is rewriting proposal ${s.redo.n}` : `${c.name} is writing a proposal`; who = `proposal ${s.nextProposal} · waiting on ${c.name}${away(c)}`; break;
+    case 'vote': { const pending = s.players.filter(p => s.proposal.votes[p.id] === undefined); text = `Voting on proposal ${s.proposal.n}`; who = pending.length ? `waiting on ${pending.map(p => p.name + away(p)).join(', ')}` : 'all votes in'; break; }
+    case 'result': text = `Proposal ${s.proposal.n} ${s.proposal.adopted ? 'adopted' : s.proposal.void ? 'void' : 'defeated'}`; who = `${c.name} rolls next`; break;
+    case 'roll': text = `${c.name} to roll`; who = `waiting on ${c.name}${away(c)}`; break;
+    case 'over': { const w = s.players.find(p => p.id === s.winner); text = w ? `${w.name} wins` : 'Game over'; who = 'press N for a new game'; break; }
+  }
+  const q = s.requests.filter(r => !r.answered).length;
+  if (q) who += ` · ${q} question${q > 1 ? 's' : ''} with the Judge`;
+  n.querySelector('.what').textContent = text;
+  n.querySelector('.who').textContent = who;
+  n.classList.toggle('on', !!text);
+}
+
+// One quiet pop-up per new log line, bottom of the table, gone after a few seconds. Never spoken.
+let lastToastAt = null;
+function renderToasts(s) {
+  const box = $('toasts');
+  if (lastToastAt === null) { lastToastAt = s.log[0]?.at ?? 0; return; }   // nothing for what happened before this screen opened
+  const fresh = s.log.filter(e => e.at > lastToastAt).reverse();
+  if (!fresh.length) return;
+  lastToastAt = s.log[0].at;
+  for (const e of fresh) {
+    const t = el('div', 'toast', esc(e.t));
+    box.appendChild(t);
+    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 500); }, 6000);
+    while (box.children.length > 4) box.firstChild.remove();
+  }
 }
 
 function renderStatus(s) {
@@ -142,7 +181,7 @@ function renderCenter(s) {
   if (c.dataset.key === key) { if (s.phase === 'vote') updateTally(s); return; }
   c.dataset.key = key;
   c.replaceChildren();
-  if (fx.die) { c.appendChild(dieEl(fx.die)); return; }
+  if (fx.die) { c.appendChild(dieEl(fx.die, s.settings.dieSides)); return; }
   if (fx.ruling) {
     const q = s.requests.find(r => r.id === fx.ruling.requestId);
     c.appendChild(el('div', 'paper ruling', `<div class="n">Judgment${q ? ` · asked by ${esc(q.byName)}` : ''}</div>${q ? `<div class="kind">“${esc(q.text)}”</div>` : ''}<div class="text">${esc(fx.ruling.text)}</div>`));
@@ -178,12 +217,13 @@ function updateTally(s) {
 
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 const LAND = { 1: 'rotateX(0) rotateY(0)', 2: 'rotateY(-90deg)', 3: 'rotateX(-90deg)', 4: 'rotateX(90deg)', 5: 'rotateY(90deg)', 6: 'rotateY(180deg)' };
-function dieEl(face) {
+function dieEl(face, sides = 6) {
   const w = el('div', 'die-wrap');
   const d = el('div', 'die rolling');
-  for (let f = 1; f <= 6; f++) d.appendChild(el('div', 'f f' + f, Array.from({ length: 9 }, (_, i) => `<i class="${PIPS[f].includes(i) ? 'on' : ''}"></i>`).join('')));
+  const big = sides > 6 || face > 6;   // a die with more than six faces shows numbers, not pips
+  for (let f = 1; f <= 6; f++) d.appendChild(big ? el('div', 'f f' + f + ' num', `<b>${face}</b>`) : el('div', 'f f' + f, Array.from({ length: 9 }, (_, i) => `<i class="${PIPS[f].includes(i) ? 'on' : ''}"></i>`).join('')));
   w.append(d, el('div', 'die-label', ''));
-  setTimeout(() => { d.classList.remove('rolling'); d.style.transform = LAND[face] + ' rotateZ(' + (Math.random() * 12 - 6) + 'deg)'; }, 1000);
+  setTimeout(() => { d.classList.remove('rolling'); d.style.transform = LAND[big ? 1 : face] + ' rotateZ(' + (Math.random() * 12 - 6) + 'deg)'; }, 1000);
   setTimeout(() => { w.querySelector('.die-label').textContent = face; }, 1900);
   return w;
 }
@@ -210,6 +250,7 @@ function openRoom() {
     onAction: (a) => host.dispatch(a),
     onLeave: (id) => host.dispatch({ type: 'leave', id }),
     judgeKey: host.judgeKey,
+    secrets: host.savedSecrets,
     onResume: host.wantsBrokerState ? (s) => {
       if (s) { delete s.stamp; for (const p of s.players) p.connected = false; host.set(s); host.dispatch({ type: 'note', text: 'Screen reloaded; game resumed from the broker.' }); }
       else host.dispatch({ type: 'note', text: 'Nothing to resume on the broker; fresh table.' });
@@ -217,6 +258,7 @@ function openRoom() {
     } : null,
   });
   $('judgeKey').textContent = host.judgeKey;
+  host.secrets = room.secrets;
   host.onChange(s => room.broadcast(s));
   window.nomicRoom = room;
   room.ready.then(() => { drawQr(); room.broadcast(host.state); if (host.resumed) host.dispatch({ type: 'note', text: 'Screen reloaded; game resumed.' }); }, () => { $('turnLine').textContent = 'No connection — check the internet and reload.'; });

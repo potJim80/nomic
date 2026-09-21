@@ -24,8 +24,12 @@ def load_bot():
     except Exception: sys.exit('the bot has no seat yet — run: bot.py join NAME')
 
 def act(room, bot, action):
+    # hello first, every time: a screen that reloaded mid-game only knows the seats that re-introduce themselves
     action.update(id=bot['id'], secret=bot['secret'])
-    send(room, action); print('sent:', action['type'])
+    c = MQTT(room['broker']).connect()
+    c.publish(topic(room['code'], 'host'), {'type': 'hello', 'id': bot['id'], 'name': bot['name'], 'secret': bot['secret']}, qos=1)
+    c.publish(topic(room['code'], 'host'), action, qos=1); time.sleep(0.3); c.close()
+    print('sent:', action['type'])
 
 def main(argv):
     if not argv or argv[0] in ('-h', '--help'): print(__doc__); return

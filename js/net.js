@@ -17,8 +17,9 @@ const PLAYER_ACTIONS = new Set(['start', 'propose', 'vote', 'roll', 'forfeit', '
 
 // The screen. Tries the brokers in order and uses the first that connects.
 // judgeKey: shown on the screen; the Judge's commands must carry it.
-export function hostRoom(code, { onAction, onLeave, judgeKey, onResume }) {
-  const secrets = new Map();          // playerId -> secret from its first hello
+export function hostRoom(code, { onAction, onLeave, judgeKey, onResume, secrets: known }) {
+  const secrets = new Map(Object.entries(known || {}));   // playerId -> secret from its first hello (kept across reloads)
+  const hostId = rid();               // changes on every screen load; phones re-introduce themselves when they see a new one
   let client = null, lastState = null;
   const events = [];                  // connection log, for debugging from the console
   const ready = new Promise((resolve, reject) => {
@@ -36,7 +37,7 @@ export function hostRoom(code, { onAction, onLeave, judgeKey, onResume }) {
         for (const ev of ['connect', 'reconnect', 'close', 'offline', 'error', 'disconnect']) client.on(ev, (e) => events.push(`${Date.now() % 100000} ${ev} ${e?.message || ''}`));
         client.on('connect', () => {
           // onResume: take the state the broker still holds for this code (a reloaded screen) before publishing ours
-          if (onResume) { client.subscribe(topic(code, 'state')); setTimeout(() => { client.unsubscribe(topic(code, 'state')); onResume(null); onResume = null; client.subscribe(topic(code, 'host'), { qos: 1 }); if (lastState) publish(lastState); }, 2500); }
+          if (onResume) { client.subscribe(topic(code, 'state')); setTimeout(() => { if (!onResume) return; client.unsubscribe(topic(code, 'state')); const f = onResume; onResume = null; f(null); client.subscribe(topic(code, 'host'), { qos: 1 }); if (lastState) publish(lastState); }, 2500); }
           else { client.subscribe(topic(code, 'host'), { qos: 1 }); if (lastState) publish(lastState); }
         });
         client.on('message', (t, buf) => {
@@ -48,10 +49,11 @@ export function hostRoom(code, { onAction, onLeave, judgeKey, onResume }) {
             onAction({ type: 'join', id: msg.id, name: msg.name });
             return;
           }
+          if (msg.type === 'who') { if (lastState) publish(lastState); return; }
           if (msg.type === 'leave') { if (secrets.get(msg.id) === msg.secret) onLeave(msg.id); return; }
           if (msg.by === 'judge') {                              // the Judge's hand, keyed to this screen
-            if (!judgeKey || msg.key !== judgeKey) return;
-            const { key, ...action } = msg;
+            if (!judgeKey || msg.judgeKey !== judgeKey) return;
+            const { judgeKey: _k, ...action } = msg;
             onAction(action);
             return;
           }
@@ -69,16 +71,16 @@ export function hostRoom(code, { onAction, onLeave, judgeKey, onResume }) {
   const publish = (state) => {
     lastState = state;
     events.push(`${Date.now() % 100000} publish ${client?.connected ? 'ok' : 'SKIPPED (not connected)'} phase=${state.phase}`);
-    if (client?.connected) client.publish(topic(code, 'state'), JSON.stringify({ ...state, stamp: Date.now() }), { qos: 0, retain: true });
+    if (client?.connected) client.publish(topic(code, 'state'), JSON.stringify({ ...state, stamp: Date.now(), hostId }), { qos: 0, retain: true });
   };
   window.addEventListener('pagehide', () => { try { client?.publish(topic(code, 'state'), '', { retain: true }); } catch {} });
-  return { ready, send: (_, state) => publish(state), broadcast: publish, peers: () => [...secrets.keys()], events };
+  return { ready, send: (_, state) => publish(state), broadcast: publish, peers: () => [...secrets.keys()], secrets: () => Object.fromEntries(secrets), events };
 }
 
 // A phone. Listens on every broker for the room's state and settles on whichever has it.
 export function joinRoom(code, { id, name, onState, onStatus }) {
   const secret = (() => { try { return localStorage.getItem('nomic.secret') || (localStorage.setItem('nomic.secret', rid()), localStorage.getItem('nomic.secret')); } catch { return rid(); } })();
-  let chosen = null, closed = false, seen = 0;
+  let chosen = null, closed = false, seen = 0, hostId = null;
   const clients = new Map();
   onStatus('connecting');
   const hello = () => chosen?.publish(topic(code, 'host'), JSON.stringify({ type: 'hello', id, name, secret }), { qos: 1 });
@@ -97,6 +99,7 @@ export function joinRoom(code, { id, name, onState, onStatus }) {
       }
       if (c !== chosen) return;
       seen++;
+      if (s.hostId && s.hostId !== hostId) { const first = hostId === null; hostId = s.hostId; if (!first) hello(); }   // a reloaded screen: introduce ourselves again
       onState(s);
     });
     c.on('reconnect', () => chosen === c && onStatus('closed'));

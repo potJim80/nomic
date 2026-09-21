@@ -14,6 +14,7 @@ export class Host {
     this.state = saved?.state || newGame((resume || want) ? (resume || want).toUpperCase().slice(0, 4) : makeCode());
     this.judgeKey = saved?.judgeKey || params.get('key') || makeCode(8);   // never in the state; only on this screen
     this.resumed = !!saved;
+    this.savedSecrets = saved?.secrets || {};
     this.wantsBrokerState = !!resume;
     this.queue = Promise.resolve();
     this.listeners = [];
@@ -21,7 +22,7 @@ export class Host {
   }
   onChange(fn) { this.listeners.push(fn); }
   set(s) { this.state = s; this.render(s); this.listeners.forEach(f => f(s)); this.save(); }
-  save() { try { localStorage.setItem('nomic.host', JSON.stringify({ state: this.state, judgeKey: this.judgeKey, at: Date.now() })); } catch {} }
+  save() { try { localStorage.setItem('nomic.host', JSON.stringify({ state: this.state, judgeKey: this.judgeKey, secrets: this.secrets?.() || this.savedSecrets || {}, at: Date.now() })); } catch {} }
 
   // Every action goes through here, one at a time, so pacing can't be interrupted.
   dispatch(action) {

@@ -19,7 +19,7 @@ import sys
 from table import *
 
 def cmd_send(room, action):
-    action.update(by='judge', key=room['key'])
+    action.update(by='judge', judgeKey=room['key'])
     send(room, action); print('sent:', action['type'])
 
 def main(argv):
