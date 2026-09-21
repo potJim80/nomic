@@ -39,8 +39,8 @@ function connect(code, name) {
     onStatus: (st, detail) => {
       status = st;
       $('#status').textContent = ({ connecting: 'connecting', open: 'connected', closed: 'reconnecting…', error: 'error: ' + (detail || '?'), 'no-room': 'no table with that code' }[st] || st);
+      if (st === 'no-room' && !state) return renderJoinForm('No table is open with that code. Check the screen, then try again.');
       $('#status').className = 'status ' + (st === 'open' ? 'open' : '');
-      if (st === 'no-room' && !state) renderJoinForm('No table is open with that code. Check the screen.');
     },
   });
 }

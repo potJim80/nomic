@@ -202,16 +202,16 @@ const host = new Host({ render, showDie });
 window.nomic = host;
 connectBridge(host);
 if (new URLSearchParams(location.search).has('demo')) runDemo(host);
-else if (window.Peer) openRoom();
+else if (window.mqtt) openRoom();
 
 function openRoom() {
   const room = hostRoom(host.state.code, {
-    onAction: (a, conn) => host.dispatch(a).then(() => room.send(conn, host.state)),
+    onAction: (a) => host.dispatch(a),
     onLeave: (id) => host.dispatch({ type: 'leave', id }),
   });
   host.onChange(s => room.broadcast(s));
   window.nomicRoom = room;
-  room.ready.then(() => drawQr(), (e) => { if (e.message === 'code-taken') location.reload(); });
+  room.ready.then(() => { drawQr(); room.broadcast(host.state); }, () => { $('turnLine').textContent = 'No connection — check the internet and reload.'; });
 }
 
 function drawQr() {
