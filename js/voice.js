@@ -3,7 +3,7 @@
 // the browser's own speech. Press V on the screen to set it up.
 
 const KEY = 'nomic.voice';
-const DEFAULTS = { key: '', voiceId: '', model: 'eleven_turbo_v2_5', read: 'rulings', rate: 1 };   // read: off | rulings | all
+const DEFAULTS = { key: '', key2: '', voiceId: '', model: 'eleven_turbo_v2_5', read: 'rulings', rate: 1 };   // read: off | rulings | all; key2 is the fallback account
 export const voice = { ...DEFAULTS };
 try { Object.assign(voice, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {}
 export function saveVoice(v) { Object.assign(voice, v); try { localStorage.setItem(KEY, JSON.stringify(voice)); } catch {} }
@@ -14,10 +14,11 @@ export function saveVoice(v) { Object.assign(voice, v); try { localStorage.setIt
   if (q.has('xi') || q.has('voice') || q.has('read')) {
     const v = {};
     if (q.has('xi')) v.key = q.get('xi');
+    if (q.has('xi2')) v.key2 = q.get('xi2');
     if (q.has('voice')) v.voiceId = q.get('voice');
     if (q.has('read')) v.read = q.get('read');
     saveVoice(v);
-    for (const k of ['xi', 'voice', 'read']) q.delete(k);
+    for (const k of ['xi', 'xi2', 'voice', 'read']) q.delete(k);
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
   }
 }
@@ -46,15 +47,26 @@ async function next() {
 }
 
 const cache = new Map();   // text -> object URL, so a repeated line costs no characters
+// Primary key first; if it is out of characters (or refused), the fallback key takes over.
+let exhausted = new Set();
 async function eleven(text) {
   let url = cache.get(text);
   if (!url) {
-    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice.voiceId)}?output_format=mp3_22050_32`, {
-      method: 'POST', headers: { 'xi-api-key': voice.key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, model_id: voice.model, voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),
-    });
-    if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 120)}`);
-    url = URL.createObjectURL(await r.blob());
+    const keys = [voice.key, voice.key2].filter(k => k && !exhausted.has(k));
+    if (!keys.length) { exhausted.clear(); throw new Error('every ElevenLabs key is exhausted or refused'); }
+    let blob = null, lastErr = '';
+    for (const key of keys) {
+      const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice.voiceId)}?output_format=mp3_22050_32`, {
+        method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, model_id: voice.model, voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),
+      });
+      if (r.ok) { blob = await r.blob(); break; }
+      lastErr = `ElevenLabs ${r.status}: ${(await r.text()).slice(0, 120)}`;
+      if ([401, 402, 429].includes(r.status)) { exhausted.add(key); continue; }   // quota or plan trouble → next key
+      break;                                                                       // anything else is not the key's fault
+    }
+    if (!blob) throw new Error(lastErr);
+    url = URL.createObjectURL(blob);
     if (cache.size > 50) cache.clear();
     cache.set(text, url);
   }
@@ -101,7 +113,17 @@ export function openVoiceDialog() {
       <h3>Voice</h3>
       <label>Read aloud <select name="read"><option value="off">Nothing</option><option value="rulings">Rulings only</option><option value="all">Rulings and narration</option></select></label>
       <label>ElevenLabs API key <input name="key" type="password" autocomplete="off" placeholder="leave blank to use the Mac's own voice"></label>
-      <label>Voice ID <input name="voiceId" autocomplete="off" placeholder="from ElevenLabs → Voices → ID"></label>
+      <label>Backup API key <input name="key2" type="password" autocomplete="off" placeholder="used when the first runs out of characters"></label>
+      <label>Voice <select name="voiceId">
+        <option value="JBFqnCBsd6RMkjVDRZzb">George — warm storyteller (British)</option>
+        <option value="onwK4e9ZLuTAKqWW03F9">Daniel — steady broadcaster (British)</option>
+        <option value="pqHfZKP75CvOlQylNhV4">Bill — wise, mature (American)</option>
+        <option value="nPczCjzI2devNBz1zQrb">Brian — deep, comforting (American)</option>
+        <option value="N2lVS1w4EtoT3dr4eOWO">Callum — husky trickster</option>
+        <option value="pFZP5JQG7iQjIQuC4Bku">Lily — velvety (British)</option>
+        <option value="XrExE9yKIg1WjnnlVkGX">Matilda — knowledgeable, professional</option>
+        <option value="">Other (paste an ID below)</option>
+      </select><input name="voiceIdOther" autocomplete="off" placeholder="voice ID — note: free plans can only use the built-in voices above"></label>
       <label>Model <select name="model"><option value="eleven_turbo_v2_5">Turbo v2.5 (fast, cheap)</option><option value="eleven_multilingual_v2">Multilingual v2 (best quality)</option><option value="eleven_flash_v2_5">Flash v2.5</option></select></label>
       <label>Speed <input name="rate" type="number" min="0.5" max="1.5" step="0.05"></label>
       <p class="hint">Stored only in this browser. Free ElevenLabs plans give about 10,000 characters a month — "rulings only" goes a long way; narration uses more.</p>
@@ -112,10 +134,14 @@ export function openVoiceDialog() {
     d.addEventListener('close', () => { if (d.returnValue === 'ok') readForm(d); });
   }
   const f = d.querySelector('form');
-  for (const k of ['read', 'key', 'voiceId', 'model', 'rate']) f.elements[k].value = voice[k];
+  for (const k of ['read', 'key', 'key2', 'model', 'rate']) f.elements[k].value = voice[k];
+  const known = [...f.elements.voiceId.options].some(o => o.value === voice.voiceId);
+  f.elements.voiceId.value = known ? voice.voiceId : '';
+  f.elements.voiceIdOther.value = known ? '' : voice.voiceId;
   d.showModal();
 }
 function readForm(d) {
   const f = d.querySelector('form');
-  saveVoice({ read: f.elements.read.value, key: f.elements.key.value.trim(), voiceId: f.elements.voiceId.value.trim(), model: f.elements.model.value, rate: Number(f.elements.rate.value) || 1 });
+  saveVoice({ read: f.elements.read.value, key: f.elements.key.value.trim(), key2: f.elements.key2.value.trim(), voiceId: (f.elements.voiceId.value || f.elements.voiceIdOther.value).trim(), model: f.elements.model.value, rate: Number(f.elements.rate.value) || 1 });
+  exhausted.clear();
 }
