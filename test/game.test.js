@@ -429,13 +429,20 @@ test('strike removes a rule, but never the last mutable one (rule 114)', () => {
   assert.equal(apply(s, { type: 'strike', n: 101 }).rules.find(r => r.n === 101), undefined, 'immutable rules can be struck by judgment');
 });
 
-test('newgame keeps the seats and the code, resets everything else', () => {
+test('newgame keeps the seats and the code, resets everything else — rules, numbers, die, win score', () => {
   let s = table(3, { judge: true });
   s = fullTurn(s, { text: 'r' });
+  s = apply(s, { type: 'setting', key: 'dieSides', value: 50, by: 'judge' });
+  s = apply(s, { type: 'setting', key: 'winScore', value: 40, by: 'judge' });
+  s = apply(s, { type: 'strike', n: 210, by: 'judge' });
+  assert.equal(s.settings.dieSides, 50);
   s = apply(s, { type: 'judge', present: true });
   s = apply(s, { type: 'newgame' });
   assert.equal(s.phase, 'lobby'); assert.equal(s.code, 'TEST'); assert.deepEqual(ids(s), ['p0', 'p1', 'p2']); assert.deepEqual(scores(s), [0, 0, 0]);
   assert.equal(s.rules.length, 29); assert.equal(s.nextProposal, 301); assert.equal(s.judge.present, true); assert.equal(s.history.length, 0);
+  assert.deepEqual(s.settings, DEFAULT_SETTINGS, 'six-sided die, first to 100, unanimity: every game starts from the Initial Set');
+  assert.deepEqual(s.rules.map(r => r.n), INITIAL_SET.map(r => r.n));
+  assert.equal(s.rulings.length, 0); assert.equal(s.requests.length, 0);
   s = apply(s, { type: 'start' });
   assert.equal(s.rules.length, 30);
 });
