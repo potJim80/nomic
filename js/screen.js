@@ -210,6 +210,11 @@ function openRoom() {
     onAction: (a) => host.dispatch(a),
     onLeave: (id) => host.dispatch({ type: 'leave', id }),
     judgeKey: host.judgeKey,
+    onResume: host.wantsBrokerState ? (s) => {
+      if (s) { delete s.stamp; for (const p of s.players) p.connected = false; host.set(s); host.dispatch({ type: 'note', text: 'Screen reloaded; game resumed from the broker.' }); }
+      else host.dispatch({ type: 'note', text: 'Nothing to resume on the broker; fresh table.' });
+      history.replaceState(null, '', location.pathname);
+    } : null,
   });
   $('judgeKey').textContent = host.judgeKey;
   host.onChange(s => room.broadcast(s));

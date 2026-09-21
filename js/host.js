@@ -9,10 +9,12 @@ export class Host {
     const want = params.get('code');   // ?code=ABCD pins the code (testing)
     // A reload resumes the game in progress (same code, key, scores) unless ?new is given,
     // so the screen can be reloaded for new code mid-game without losing the table.
-    const saved = !want && !params.has('new') ? loadSaved() : null;
-    this.state = saved?.state || newGame(want ? want.toUpperCase().slice(0, 4) : makeCode());
+    const saved = !want && !params.has('new') && !params.has('resume') ? loadSaved() : null;
+    const resume = params.get('resume');   // ?resume=CODE&key=KEY: pull the game back from the broker
+    this.state = saved?.state || newGame((resume || want) ? (resume || want).toUpperCase().slice(0, 4) : makeCode());
     this.judgeKey = saved?.judgeKey || params.get('key') || makeCode(8);   // never in the state; only on this screen
     this.resumed = !!saved;
+    this.wantsBrokerState = !!resume;
     this.queue = Promise.resolve();
     this.listeners = [];
     this.render(this.state);

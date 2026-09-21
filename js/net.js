@@ -17,7 +17,7 @@ const PLAYER_ACTIONS = new Set(['start', 'propose', 'vote', 'roll', 'forfeit', '
 
 // The screen. Tries the brokers in order and uses the first that connects.
 // judgeKey: shown on the screen; the Judge's commands must carry it.
-export function hostRoom(code, { onAction, onLeave, judgeKey }) {
+export function hostRoom(code, { onAction, onLeave, judgeKey, onResume }) {
   const secrets = new Map();          // playerId -> secret from its first hello
   let client = null, lastState = null;
   const events = [];                  // connection log, for debugging from the console
@@ -34,9 +34,14 @@ export function hostRoom(code, { onAction, onLeave, judgeKey }) {
         // reconnect for real, with auto-reconnect on
         client = mqtt.connect(url, opts());
         for (const ev of ['connect', 'reconnect', 'close', 'offline', 'error', 'disconnect']) client.on(ev, (e) => events.push(`${Date.now() % 100000} ${ev} ${e?.message || ''}`));
-        client.on('connect', () => { client.subscribe(topic(code, 'host'), { qos: 1 }); if (lastState) publish(lastState); });
+        client.on('connect', () => {
+          // onResume: take the state the broker still holds for this code (a reloaded screen) before publishing ours
+          if (onResume) { client.subscribe(topic(code, 'state')); setTimeout(() => { client.unsubscribe(topic(code, 'state')); onResume(null); onResume = null; client.subscribe(topic(code, 'host'), { qos: 1 }); if (lastState) publish(lastState); }, 2500); }
+          else { client.subscribe(topic(code, 'host'), { qos: 1 }); if (lastState) publish(lastState); }
+        });
         client.on('message', (t, buf) => {
           const msg = parse(buf); if (!msg || typeof msg !== 'object') return;
+          if (t === topic(code, 'state')) { if (onResume && msg.phase) { const f = onResume; onResume = null; client.unsubscribe(topic(code, 'state')); f(msg); client.subscribe(topic(code, 'host'), { qos: 1 }); } return; }
           if (msg.type === 'hello') {
             if (!secrets.has(msg.id)) secrets.set(msg.id, msg.secret);
             if (secrets.get(msg.id) !== msg.secret) return;
