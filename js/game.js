@@ -52,6 +52,7 @@ export function apply(state, action) {
   switch (action.type) {
 
     case 'join': {
+      if ((s.banned || []).includes(action.id)) return state;
       const back = s.players.find(p => p.id === action.id);
       if (back) { back.connected = true; return s; }
       if (s.phase !== 'lobby') return state;
@@ -207,6 +208,13 @@ export function apply(state, action) {
       return s;
     }
 
+    case 'ban': {        // the Judge removes a seat for good: it cannot rejoin this table
+      const p = s.players.find(p => p.id === action.id || p.name.toLowerCase() === String(action.name || '').toLowerCase());
+      if (!p) return state;
+      s.banned = [...(s.banned || []), p.id];
+      return apply(s, { type: 'forfeit', id: p.id, by: 'judge' });
+    }
+
     case 'judge': {      // the Judge sits down or gets up
       const was = s.judge.present;
       s.judge.present = !!action.present;
@@ -225,6 +233,7 @@ export function apply(state, action) {
       const next = newGame(s.code);
       next.players = s.players.map((p, i) => ({ ...p, score: 0, color: COLORS[i % COLORS.length] }));
       next.judge = { ...s.judge };
+      next.banned = s.banned || [];
       next.log.unshift({ t: 'New game.', at: Date.now() });
       return next;
     }

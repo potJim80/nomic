@@ -12,6 +12,7 @@
   judge.py void "reason"                void the proposal on the table: before the vote closes the mover rewrites it; after adoption it is undone
   judge.py strike N "reason"            remove rule N outright
   judge.py remove NAME                  remove a player from the table (rule 113)
+  judge.py ban NAME                     remove a player and keep that phone out of this table
   judge.py newgame                      same seats, fresh rules
   judge.py note "text"                  a line in the table's log (not a ruling, not read aloud)
 """
@@ -54,6 +55,7 @@ def main(argv):
         s = read_state(room); p = next((p for p in s['players'] if p['name'].lower() == args[0].lower()), None)
         if not p: sys.exit('no such player')
         cmd_send(room, {'type': 'forfeit', 'id': p['id']})
+    elif cmd == 'ban': cmd_send(room, {'type': 'ban', 'name': args[0]})
     elif cmd == 'newgame': cmd_send(room, {'type': 'newgame'})
     elif cmd == 'note': cmd_send(room, {'type': 'note', 'text': args[0]})
     else: sys.exit('unknown command; judge.py --help')

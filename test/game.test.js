@@ -429,6 +429,20 @@ test('strike removes a rule, but never the last mutable one (rule 114)', () => {
   assert.equal(apply(s, { type: 'strike', n: 101 }).rules.find(r => r.n === 101), undefined, 'immutable rules can be struck by judgment');
 });
 
+test('ban removes the seat and keeps that phone out, even after a new game', () => {
+  let s = newGame('X');
+  s = apply(s, { type: 'join', id: 'a', name: 'A' }); s = apply(s, { type: 'join', id: 'b', name: 'Rude' });
+  s = apply(s, { type: 'ban', name: 'rude' });
+  assert.deepEqual(ids(s), ['a']);
+  assert.equal(apply(s, { type: 'join', id: 'b', name: 'Rude' }), s);
+  s = apply(s, { type: 'join', id: 'c', name: 'C' }); s = apply(s, { type: 'start' });
+  assert.equal(apply(s, { type: 'ban', name: 'nobody' }), s);
+  s = apply(s, { type: 'ban', name: 'C' });
+  assert.equal(s.phase, 'over', 'one player left');
+  s = apply(s, { type: 'newgame' });
+  assert.equal(apply(s, { type: 'join', id: 'b', name: 'Rude' }), s);
+});
+
 test('newgame keeps the seats and the code, resets everything else — rules, numbers, die, win score', () => {
   let s = table(3, { judge: true });
   s = fullTurn(s, { text: 'r' });
